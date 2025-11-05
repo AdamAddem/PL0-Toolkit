@@ -2,8 +2,6 @@
 Assignment:
 HW3 - Parser and Code Generator for PL/0
 
-Author: Ernesto Lugo
-
 Language: C
 
 To Compile:
@@ -27,13 +25,8 @@ Notes:
   -Generates PM/0 assembly code (see Appendix A for ISA)
   -All development and testing performed on Eustis
 
-Class: COP3402 - System Software - Fall 2025
-
-Instructor: Dr. Jie Lin
-
 Due Date: Friday, October 31, 2025 at 11:59 PM ET
 */
-
 
 #include <stdio.h>
 #include <string.h>
