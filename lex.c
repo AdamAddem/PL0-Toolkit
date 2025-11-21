@@ -307,7 +307,6 @@ TokenType grabNextToken(FILE* fp, char* str)
 
 }
 
-
 int main(int argc, char** argv)
 {
   /*----- Opening and Verifying File -----*/

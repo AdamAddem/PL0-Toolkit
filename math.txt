@@ -1,0 +1,102 @@
+var param, retval, retval2;
+
+procedure twopower; /* Returns 2^N */
+begin
+  retval := 1;
+  
+  while param > 0 do
+  begin
+    retval := retval * 2;
+    param := param - 1;
+  end;
+end;
+
+procedure logtwoRem; /* Returns log base 2 of N, with remainder stored in retval2; */
+var n, log;
+begin
+  n := param;
+  retval := 0;
+
+  while param > 1 do
+  begin
+    param := param / 2;
+    log := log + 1;
+  end;
+
+  param := log;
+  call twopower;
+
+  retval2 := n - retval;
+  retval := log;
+end;
+
+procedure numbits; /* Returns number of bits required to store N; valid for N > 0 */
+var original, nbits;
+begin
+  original := param;
+  call logtwoRem;
+  nbits := retval;
+  
+  if retval2 > 0 then
+    nbits := nbits + 1
+  else
+    
+  fi;
+
+  retval := nbits;
+end;
+
+procedure sqrt; /* Retval: sqrt(N) floored; Retval2: Remainder of sqrt(N) floored; valid for N >= 0 */
+var x, y, n;
+begin
+  n := param;
+  if n > 0 then 
+  begin
+    x := n;
+    y := (x + 1) / 2;
+
+    while y < x do
+    begin
+      x := y;
+      y := (x + (n/x)) / 2;
+    end;
+
+    if (x*x) > n then
+      x := x - 1
+    else fi;
+
+    retval := x;
+    retval2 := n - (x*x);
+  end
+
+  else retval := 0 fi;
+end;
+
+procedure fibNumber; /* Returns Nth fibonacci number; N >= 2 */
+var i, n, val0, val1;
+begin
+  i := 1;
+  n := param;
+  val0 := 0;
+  val1 := 1;
+
+  while i < n do
+  begin
+    i := i + 1;
+
+    retval := val0 + val1;
+    val0 := val1;
+    val1 := retval;
+  end;
+
+end;
+
+/* Main Procedure */
+/* When calling a function, place the parameter into the param variable, and then call */
+/* Results will be placed into the retval and retval2 variables */
+/* Don't write too much code in the main function, the PAS is too cluttered with instructions to accept many more before overflowing */  
+begin 
+  read param;
+  call twopower;
+  write retval;
+end. 

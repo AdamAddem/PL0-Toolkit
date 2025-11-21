@@ -85,7 +85,7 @@ enum Instructions
 typedef struct Instruction
 {
   int op;
-  //l is never used
+  int l;
   int m;
 }Instruction;
 
@@ -214,10 +214,11 @@ void insertProc(int _addr, const char* _name)
   insertSymbol(newproc);
 }
 
-void insertInstruction(int _op, int _m, unsigned _line)
+void insertInstruction(int _op, int _l, int _m, unsigned _line)
 {
   Instruction newinstruction;
   newinstruction.op = _op;
+  newinstruction.l = _l;
   newinstruction.m = _m;
   instruction_list[_line] = newinstruction;
 }
@@ -230,10 +231,9 @@ int lookupSymbol(const char* _name)
     if(symbol_table[i].kind == 0)
       return -1;
 
-    if(strcmp(_name, symbol_table[i].name) == 0)
-    {
+    if(strcmp(_name, symbol_table[i].name) == 0 && symbol_table[i].level <= currentLevel && symbol_table[i].mark == Available)
       return i;
-    }
+
   }
 
   exit(-1);
@@ -244,9 +244,21 @@ void markSymbol(const char* _name)
   symbol_table[lookupSymbol(_name)].mark = 1;
 }
 
-void markSymbolI(unsigned _index) //c doesn't have function overloading? tell me again how its 'better' than cpp
+void markSymbolI(unsigned _index) //c not having function overloading is stupid
 {
   symbol_table[_index].mark = 1;
+}
+
+void markSymbolsAt(int _l)
+{
+  for(int i=0; i<MAX_SYMBOL_TABLE_SIZE; ++i)
+  {
+    if(symbol_table[i].kind == 0)
+      return;
+
+    if(symbol_table[i].level >= _l)
+      symbol_table[i].mark = Unavailable;
+  }
 }
 
 void printInstructions();
@@ -417,7 +429,7 @@ void isProgram()
 {
   parseBlock();
   if(token_list[tokenindex++].type != periodsym) printErrorAndHalt(PeriodMissing);
-  insertInstruction(SYS, 3, linenumber++);
+  insertInstruction(SYS, 0, 3, linenumber++);
 
   //mark all symbols as unavailable when done with context
   for(int i=0; i<MAX_SYMBOL_TABLE_SIZE; ++i)
@@ -437,10 +449,11 @@ void parseBlock()
 
   int jmpLocaton = linenumber++;
   parseProcDecl();
-  insertInstruction(JMP, (linenumber)*3, jmpLocaton);
-  insertInstruction(INC, numLocals, linenumber++);
+  insertInstruction(JMP, 0, (linenumber)*3, jmpLocaton);
+  insertInstruction(INC, 0, numLocals, linenumber++);
 
   parseStatement();
+  markSymbolsAt(currentLevel);
 }
 
 void parseConstDecl()
@@ -480,7 +493,7 @@ void parseConstDecl()
 int parseVarDecl()
 {
   int numvars = 3;
-  if(token_list[tokenindex++].type != varsym) {--tokenindex; return 0;}  
+  if(token_list[tokenindex++].type != varsym) {--tokenindex; return 3;}  
   if(token_list[tokenindex].type != identsym) printErrorAndHalt(IdentifierMissing);
   if(lookupSymbol(token_list[tokenindex].name) != -1) printErrorAndHalt(SymbolPreviouslyDeclared);
   insertVar( numvars++, token_list[tokenindex].name);
@@ -515,7 +528,7 @@ void parseProcDecl()
     if(token_list[tokenindex++].type != semicolonsym) printErrorAndHalt(ProcDeclarationNoSemicolon);//insert error
     parseBlock();
     if(token_list[tokenindex++].type != semicolonsym) printErrorAndHalt(ProcDeclarationNoSemicolon);//insert error
-    insertInstruction(OPR, RTN, linenumber++);  
+    insertInstruction(OPR, 0, RTN, linenumber++);  
     --currentLevel;
   }
 }
@@ -531,8 +544,9 @@ void parseStatement()
     if(symbolindex == -1) printErrorAndHalt(UndeclaredIdentifier);
     if(symbol_table[symbolindex].kind != Variable) printErrorAndHalt(NonVarAltered);
     if(token_list[tokenindex++].type != becomessym) printErrorAndHalt(WrongAssignmentSymbol);
+
     parseExpression();
-    insertInstruction(STO, symbol_table[symbolindex].addr, linenumber++);
+    insertInstruction(STO, currentLevel - symbol_table[symbolindex].level, symbol_table[symbolindex].addr, linenumber++);
     }
     break;
 
@@ -540,8 +554,8 @@ void parseStatement()
     {
       int symbolindex = lookupSymbol(token_list[tokenindex++].name);
       if(symbolindex == -1) printErrorAndHalt(UndeclaredIdentifier);
-      if(symbol_table[symbolindex].kind != Procedure) printErrorAndHalt(CallOnNonProc);//insert error
-      insertInstruction(CAL, symbol_table[symbolindex].addr, linenumber++);
+      if(symbol_table[symbolindex].kind != Procedure) printErrorAndHalt(CallOnNonProc);
+      insertInstruction(CAL, currentLevel, symbol_table[symbolindex].addr, linenumber++); //tentative
     }
     break;
 
@@ -562,11 +576,11 @@ void parseStatement()
     if(token_list[tokenindex++].type != thensym) printErrorAndHalt(IfNoThen);
     int tmp = linenumber++;
     parseStatement();
-    insertInstruction(JPC, (linenumber)*3, tmp);
+    insertInstruction(JPC, 0, (linenumber+1)*3, tmp);
     int tmp2 = linenumber++;
     if(token_list[tokenindex++].type != elsesym) printErrorAndHalt(IfNoElse);
     parseStatement();
-    insertInstruction(JMP, (linenumber)*3, tmp2);
+    insertInstruction(JMP, 0, (linenumber)*3, tmp2);
     if(token_list[tokenindex++].type != fisym) printErrorAndHalt(ElseNoFi);
     }
     break;
@@ -579,8 +593,8 @@ void parseStatement()
     int postcondition = linenumber++;
     if(token_list[tokenindex++].type != dosym) printErrorAndHalt(WhileNoDo);
     parseStatement();
-    insertInstruction(JMP, precondition*3, linenumber++);
-    insertInstruction(JPC, linenumber*3, postcondition);
+    insertInstruction(JMP, 0, precondition*3, linenumber++);
+    insertInstruction(JPC, 0, linenumber*3, postcondition);
     }
     break;
 
@@ -590,14 +604,14 @@ void parseStatement()
     if(symbolindex == -1) printErrorAndHalt(UndeclaredIdentifier);
     if(symbol_table[symbolindex].kind != Variable) printErrorAndHalt(NonVarAltered);
 
-    insertInstruction(SYS, 2, linenumber++);
-    insertInstruction(STO, symbol_table[symbolindex].addr, linenumber++);
+    insertInstruction(SYS, 0, 2, linenumber++);
+    insertInstruction(STO, currentLevel - symbol_table[symbolindex].level, symbol_table[symbolindex].addr, linenumber++);
     }
     break;
     
     case writesym:
     parseExpression();
-    insertInstruction(SYS, 1, linenumber++);
+    insertInstruction(SYS, 0, 1, linenumber++);
     break;
 
 
@@ -614,7 +628,7 @@ void parseCondition()
   {
     tokenindex++;
     parseExpression();
-    insertInstruction(OPR, EVEN, linenumber++);
+    insertInstruction(OPR, 0, EVEN, linenumber++);
   }
   else
   {
@@ -642,7 +656,7 @@ void parseCondition()
     }
 
     parseExpression();
-    insertInstruction(OPR, comparisonopr, linenumber++);
+    insertInstruction(OPR, 0, comparisonopr, linenumber++);
   }
 }
 
@@ -656,9 +670,9 @@ void parseExpression()
     tokenindex++;
     parseTerm();
     if(type == plussym)
-      insertInstruction(OPR, ADD, linenumber++);
+      insertInstruction(OPR, 0, ADD, linenumber++);
     else
-      insertInstruction(OPR, SUB, linenumber++);
+      insertInstruction(OPR, 0, SUB, linenumber++);
 
     type = token_list[tokenindex].type;
   } 
@@ -674,9 +688,9 @@ void parseTerm()
     tokenindex++;
     parseFactor();
     if(type == multsym)
-      insertInstruction(OPR, MUL, linenumber++);
+      insertInstruction(OPR, 0, MUL, linenumber++);
     else
-      insertInstruction(OPR, DIV, linenumber++);
+      insertInstruction(OPR, 0, DIV, linenumber++);
 
     type = token_list[tokenindex].type;
   }
@@ -692,15 +706,15 @@ void parseFactor()
       if(symbolindex == -1) printErrorAndHalt(UndeclaredIdentifier);
 
       if(symbol_table[symbolindex].kind == Variable)
-        insertInstruction(LOD, symbol_table[symbolindex].addr, linenumber++);
+        insertInstruction(LOD, currentLevel - symbol_table[symbolindex].level, symbol_table[symbolindex].addr, linenumber++);
       else // const
-        insertInstruction(LIT, symbol_table[symbolindex].val, linenumber++);
+        insertInstruction(LIT, 0, symbol_table[symbolindex].val, linenumber++);
     }
     break;
 
     case numbersym:
     tokenindex++;
-    insertInstruction(LIT, token_list[tokenindex].value, linenumber++);
+    insertInstruction(LIT, 0, token_list[tokenindex].value, linenumber++);
     break;
 
     case lparentsym:
@@ -750,11 +764,11 @@ int main()
     if(instruction_list[i].op == 0)
       break;
 
-    fprintf(fp,"%d %d %d\n", instruction_list[i].op, 0, instruction_list[i].m);
+    fprintf(fp,"%d %d %d\n", instruction_list[i].op, instruction_list[i].l, instruction_list[i].m);
 
     printf("%3d", i);
     printOP(instruction_list[i].op);
-    printf("%5d%5d\n", 0, instruction_list[i].m);
+    printf("%5d%5d\n", instruction_list[i].l, instruction_list[i].m);
   }
 
   fclose(fp);

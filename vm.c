@@ -63,7 +63,8 @@ enum OPERATIONS
   LSS,
   LEQ,
   GTR,
-  GEQ = 10
+  GEQ,
+  EVEN = 11
 };
 
 enum SYSCALLS
@@ -113,8 +114,8 @@ int main(int argc, char* argv[])
     return 1;
   }
   /*----- Opening and Verifying File -----*/
-
   
+
   /*----- Loading Text Segment -----*/
   while(fscanf(fp, "%d %d %d", &PAS[PC], &PAS[PC-1], &PAS[PC-2]) == 3)
     PC -= 3;
@@ -245,7 +246,7 @@ int main(int argc, char* argv[])
             break;
 
           case EQL:
-            PAS[SP+1] = PAS[SP+1] - PAS[SP];
+            PAS[SP+1] = PAS[SP+1] == PAS[SP];
             ++SP;
             printf("EQL");
             break;
@@ -278,6 +279,11 @@ int main(int argc, char* argv[])
             PAS[SP+1] = PAS[SP+1] >= PAS[SP];
             ++SP;
             printf("GEQ");
+            break;
+
+          case EVEN:
+            PAS[SP] = PAS[SP] % 2 ? 1 : 0;
+            printf("EVEN");
             break;
 
           default:
