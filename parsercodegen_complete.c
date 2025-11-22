@@ -1,5 +1,43 @@
 /*
+  Assignment:
+  HW4 - Complete Parser and Code Generator for PL/0
+        (with Procedures, Call, and Else)
 
+  Author(s): <Ernesto Lugo>, <Anthony Casseus>
+
+  Language: C (only)
+
+  To Compile:
+    Scanner:
+      gcc -O2 -std=c11 -o lex lex.c
+    Parser/Code Generator:
+      gcc -O2 -std=c11 -o parsercodegen_complete parsercodegen_complete.c
+    Virtual Machine:
+      gcc -O2 -std=c11 -o vm vm.c
+
+  To Execute (on Eustis):
+    ./lex <input_file.txt>
+    ./parsercodegen_complete
+    ./vm elf.txt
+
+  where:
+    <input_file.txt> is the path to the PL/0 source program
+
+  Notes:
+    - lex.c accepts ONE command-line argument (input PL/0 source file)
+    - parsercodegen_complete.c accepts NO command-line arguments
+    - Input filename is hard-coded in parsercodegen_complete.c
+    - Implements recursive-descent parser for extended PL/0 grammar
+    - Supports procedures, call statements, and if-then-else
+    - Generates PM/0 assembly code (see Appendix A for ISA)
+    - VM must support EVEN instruction (OPR 0 11)
+    - All development and testing performed on Eustis
+
+  Class: COP3402 - System Software - Fall 2025
+
+  Instructor: Dr. Jie 
+  
+  Due Date: Friday, November 21, 2025 at 11:59 PM ET
 */
 
 #include <stdio.h>
@@ -226,18 +264,32 @@ void insertInstruction(int _op, int _l, int _m, unsigned _line)
 //-1 on failure to find, index on success
 int lookupSymbol(const char* _name)
 {
-  for(int i=0; i<MAX_SYMBOL_TABLE_SIZE; ++i)
+  for(int i=MAX_SYMBOL_TABLE_SIZE-1; i >= 0; --i)
   {
-    if(symbol_table[i].kind == 0)
-      return -1;
-
     if(strcmp(_name, symbol_table[i].name) == 0 && symbol_table[i].level <= currentLevel && symbol_table[i].mark == Available)
       return i;
 
   }
 
-  exit(-1);
+  return -1;
 }
+
+int isValidDecl(const char* _name)
+{
+  for(int i=MAX_SYMBOL_TABLE_SIZE-1; i >= 0; --i)
+  {
+    if(strcmp(_name, symbol_table[i].name) != 0) continue;
+    if(symbol_table[i].level != currentLevel) continue;
+    if(symbol_table[i].mark == Unavailable) continue;
+
+
+    return 0;
+  }
+
+  return 1;
+}
+
+
 
 void markSymbol(const char* _name)
 {
@@ -302,6 +354,10 @@ void printErrorAndHalt(ErrorCode _error_code)
       errcode = "Error: right parenthesis must follow left parenthesis"; break;
     case ArithmeticOperationIncomplete:
       errcode = "Error: arithmetic equations must contain operands, parentheses, numbers, or symbols"; break;
+    case CallOnNonProc:
+      errcode = "Error: call statement may only target procedures"; break;
+    case ProcDeclarationNoSemicolon:
+      errcode = "Error: procedure declaration must be followed by a semicolon"; break;
     case SkipsymDetected:
       errcode = "Error: Scanning error detected by lexer (skipsym present)"; break;
 
@@ -430,15 +486,6 @@ void isProgram()
   parseBlock();
   if(token_list[tokenindex++].type != periodsym) printErrorAndHalt(PeriodMissing);
   insertInstruction(SYS, 0, 3, linenumber++);
-
-  //mark all symbols as unavailable when done with context
-  for(int i=0; i<MAX_SYMBOL_TABLE_SIZE; ++i)
-  {
-    if(symbol_table[i].kind == 0)
-      break;
-
-    symbol_table[i].mark = 1;
-  }
 }
 
 void parseBlock()
@@ -461,7 +508,7 @@ void parseConstDecl()
 
   if(token_list[tokenindex++].type != constsym) {--tokenindex; return;}  
   if(token_list[tokenindex].type != identsym) printErrorAndHalt(IdentifierMissing);
-  if(lookupSymbol(token_list[tokenindex].name) != -1) printErrorAndHalt(SymbolPreviouslyDeclared);
+  if(isValidDecl(token_list[tokenindex].name) == 0) printErrorAndHalt(SymbolPreviouslyDeclared);
   int tmp = tokenindex;
   tokenindex++;
 
@@ -474,7 +521,7 @@ void parseConstDecl()
   while(token_list[tokenindex].type == commasym)
   {
     if(token_list[++tokenindex].type != identsym) printErrorAndHalt(IdentifierMissing);
-    if(lookupSymbol(token_list[tokenindex].name) != -1) printErrorAndHalt(SymbolPreviouslyDeclared);
+    if(isValidDecl(token_list[tokenindex].name) == 0) printErrorAndHalt(SymbolPreviouslyDeclared);
     int tmp2 = tokenindex;
     tokenindex++;
 
@@ -495,7 +542,7 @@ int parseVarDecl()
   int numvars = 3;
   if(token_list[tokenindex++].type != varsym) {--tokenindex; return 3;}  
   if(token_list[tokenindex].type != identsym) printErrorAndHalt(IdentifierMissing);
-  if(lookupSymbol(token_list[tokenindex].name) != -1) printErrorAndHalt(SymbolPreviouslyDeclared);
+  if(isValidDecl(token_list[tokenindex].name) == 0) printErrorAndHalt(SymbolPreviouslyDeclared);
   insertVar( numvars++, token_list[tokenindex].name);
   tokenindex++;
 
@@ -504,7 +551,7 @@ int parseVarDecl()
   {
     tokenindex++;
     if(token_list[tokenindex].type != identsym) printErrorAndHalt(IdentifierMissing);
-    if(lookupSymbol(token_list[tokenindex].name) != -1) printErrorAndHalt(SymbolPreviouslyDeclared);
+    if(isValidDecl(token_list[tokenindex].name) == 0) printErrorAndHalt(SymbolPreviouslyDeclared);
     insertVar(numvars++, token_list[tokenindex].name);
     tokenindex++;
   }
@@ -520,7 +567,7 @@ void parseProcDecl()
   {
     ++tokenindex;
     if(token_list[tokenindex].type != identsym) printErrorAndHalt(IdentifierMissing);//insert error
-    if(lookupSymbol(token_list[tokenindex].name) != -1) printErrorAndHalt(SymbolPreviouslyDeclared);//insert error
+    if(isValidDecl(token_list[tokenindex].name) == 0) printErrorAndHalt(SymbolPreviouslyDeclared);//insert error
     insertProc(linenumber*3, token_list[tokenindex].name);
     ++tokenindex;
     
@@ -555,7 +602,7 @@ void parseStatement()
       int symbolindex = lookupSymbol(token_list[tokenindex++].name);
       if(symbolindex == -1) printErrorAndHalt(UndeclaredIdentifier);
       if(symbol_table[symbolindex].kind != Procedure) printErrorAndHalt(CallOnNonProc);
-      insertInstruction(CAL, currentLevel, symbol_table[symbolindex].addr, linenumber++); //tentative
+      insertInstruction(CAL,  currentLevel - symbol_table[symbolindex].level, symbol_table[symbolindex].addr, linenumber++); //tentative
     }
     break;
 

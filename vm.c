@@ -1,30 +1,46 @@
 /*
-Assignment:
-vm.c - Implement a P-machine virtual machine
+  Assignment:
+  HW4 - Complete Parser and Code Generator for PL/0
+        (with Procedures, Call, and Else)
 
-Language: C(only)
+  Author(s): <Ernesto Lugo>, <Anthony Casseus>
 
-To Compile:
-  gcc -O2 -Wall -std = c11 -o vm vm.c
+  Language: C (only)
 
-To Execute (on Eustis):
-  ./vm input.txt
+  To Compile:
+    Scanner:
+      gcc -O2 -std=c11 -o lex lex.c
+    Parser/Code Generator:
+      gcc -O2 -std=c11 -o parsercodegen_complete parsercodegen_complete.c
+    Virtual Machine:
+      gcc -O2 -std=c11 -o vm vm.c
 
-where:
-  input.txt is the name of the file containing PM /0 instructions;
-  each line has three integers (OP L M)
+  To Execute (on Eustis):
+    ./lex <input_file.txt>
+    ./parsercodegen_complete
+    ./vm elf.txt
 
-Notes:
-  -Implements the PM /0 virtual machine described in the homework
-  instructions.
-  -No dynamic memory allocation or pointer arithmetic.
-  -Does not implement any VM instruction using a separate function.
-  -Runs on Eustis.
+  where:
+    <input_file.txt> is the path to the PL/0 source program
 
-Due Date: Friday, September 12th, 2025
+  Notes:
+    - lex.c accepts ONE command-line argument (input PL/0 source file)
+    - parsercodegen_complete.c accepts NO command-line arguments
+    - Input filename is hard-coded in parsercodegen_complete.c
+    - Implements recursive-descent parser for extended PL/0 grammar
+    - Supports procedures, call statements, and if-then-else
+    - Generates PM/0 assembly code (see Appendix A for ISA)
+    - VM must support EVEN instruction (OPR 0 11)
+    - All development and testing performed on Eustis
+
+  Class: COP3402 - System Software - Fall 2025
+
+  Instructor: Dr. Jie 
+  
+  Due Date: Friday, November 21, 2025 at 11:59 PM ET
 */
-
 #include <stdio.h>
+#include <string.h>
 
 
 
@@ -131,6 +147,10 @@ int main(int argc, char* argv[])
   printf("\n\tL\tM    %s   %s   %s   %s\n", "PC", "BP", "SP", "stack");
   printf("Initial values:\t   %5d%5d%5d\n", PC, BP, SP);
 
+  int ARS[100]; //stupid stupid stupid stupid stupid stupid stupid stupid
+  memset(ARS, 0, 100*sizeof(int));
+  int topARs = 0;
+
   
   /*----- Main Loop -----*/
   int continueProgram = 1;
@@ -169,6 +189,9 @@ int main(int argc, char* argv[])
         PAS[SP-3] = PC;
         BP = SP - 1;
         PC = 499 - IR[M];
+
+        ARS[topARs] = BP;
+        topARs++;
         printf("CAL");
         break;
 
@@ -218,6 +241,8 @@ int main(int argc, char* argv[])
             SP = BP + 1;
             BP = PAS[SP-2];
             PC = PAS[SP-3];
+            ARS[topARs] = 0;
+            --topARs;
             printf("RTN");
             break;
 
@@ -282,7 +307,7 @@ int main(int argc, char* argv[])
             break;
 
           case EVEN:
-            PAS[SP] = PAS[SP] % 2 ? 1 : 0;
+            PAS[SP] = (PAS[SP] % 2 == 0);
             printf("EVEN");
             break;
 
@@ -303,10 +328,8 @@ int main(int argc, char* argv[])
     printf("\t%d\t%-2d %5d%5d%5d  ", IR[L], IR[M], PC, BP, SP);
 
     int baseOfStack;
-    int ARs;
-
     //finds # of activation records for printing purposes
-    for(ARs=0; ; ++ARs)
+    for(int ARs=0; ; ++ARs)
     {
       if(base(BP, ARs) == 0)
       {
@@ -316,14 +339,18 @@ int main(int argc, char* argv[])
     }
 
 
+
+
     //weird code that prints from bottom to top of stack cause yall wanted that for some reason
     //if printing the BP of an AR, adds | for formatting
+    int tmp = topARs;
+    int tmp2 = 0;
     for(int i=baseOfStack; i>=SP; --i)
     {
-      if(base(BP, ARs-1) == i && ARs != 0)
+      if(ARS[tmp2] == i && tmp2 <topARs)
       {
-        printf("\b| ");
-        --ARs;
+        printf("| ");
+        ++tmp2;
       }
       printf("%-2d ", PAS[i]);
     }
