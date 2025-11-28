@@ -3,8 +3,6 @@
   HW4 - Complete Parser and Code Generator for PL/0
         (with Procedures, Call, and Else)
 
-  Author(s): <Ernesto Lugo>, <Anthony Casseus>
-
   Language: C (only)
 
   To Compile:
@@ -33,11 +31,7 @@
     - VM must support EVEN instruction (OPR 0 11)
     - All development and testing performed on Eustis
 
-  Class: COP3402 - System Software - Fall 2025
-
-  Instructor: Dr. Jie 
-  
-  Due Date: Friday, November 21, 2025 at 11:59 PM ET
+  Class: COP3402 - System Software
 */
 
 #include <stdio.h>
